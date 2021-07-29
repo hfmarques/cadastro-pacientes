@@ -1,0 +1,100 @@
+service: cadastro-pacientes
+
+plugins:
+  # npm i serverless-dynamodb-local --save-dev && serverless dynamodb install && serverless dynamodb install
+  - serverless-dynamodb-local
+  - serverless-offline
+
+frameworkVersion: '2'
+
+custom:
+  dynamodb:
+  # If you only want to use DynamoDB Local in some stages, declare them here
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      heapInitial: 200m
+      heapMax: 1g
+      migrate: true
+      seed: true
+      convertEmptyValues: true
+      noStart: true
+    seed:
+      domain:
+        sources:
+          - table: PACIENTES
+            sources: [./offline/migrations/pacientes-seed.json]
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  lambdaHashingVersion: 20201221
+
+  # you can overwrite defaults here
+  stage: dev
+  region: sa-east-1
+  environment:
+    PACIENTES_TABLE: 'PACIENTES-${opt:stage, self:provider.stage}'
+    
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:Query"
+        - "dynamodb:Scan"
+        - "dynamodb:PutItem"
+        - "dynamodb:DeleteItem"
+        - "dynamodb:GetItem"
+        - "dynamodb:UpdateItem"
+      Resource: 'arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.PACIENTES_TABLE}'
+
+functions:
+  listarPacientes:
+    handler: handler.listarPacientes
+    events:
+      - httpApi:
+          path: /pacientes
+          method: get
+  obterPaciente:
+    handler: handler.obterPaciente
+    events:
+      - httpApi:
+          path: /obterPaciente/{pacienteId}
+          method: get
+  cadastrarPaciente:
+    handler: handler.cadastrarPaciente
+    events:
+      - httpApi:
+          path: /cadastrarPaciente
+          method: post
+  atualizarPaciente:
+    handler: handler.atualizarPaciente
+    events:
+      - httpApi:
+          path: /atualizarPaciente/{pacienteId}
+          method: put
+  excluirPaciente:
+    handler: handler.excluirPaciente
+    events:
+      - httpApi:
+          path: /excluirPaciente/{pacienteId}
+          method: delete
+
+resources:
+  Resources:
+    PacientesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.PACIENTES_TABLE}
+        AttributeDefinitions:
+          - AttributeName: paciente_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: paciente_id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+configValidationMode: error
